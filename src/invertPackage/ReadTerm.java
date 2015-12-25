@@ -15,7 +15,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Scanner;
-import java.util.Set;
+import java.util.TreeSet;
 
 public class ReadTerm {
 
@@ -30,10 +30,9 @@ public class ReadTerm {
 		String word;
 		String stemOut;
 		Stemmer stemObj = new Stemmer();
+		TreeSet<Integer> allDocIds = new TreeSet<Integer>();
 		try {
-			input = new Scanner(new FileReader(srcPath + "//input//cran.txt"));
-			out = new PrintWriter(new FileWriter(srcPath
-					+ "//output//outFile.txt"));
+			input = new Scanner(new FileReader(srcPath + "//input//cran.all.1400"));
 			File stopWordFile = new File(srcPath + "//input//stopWords.txt");
 			/********* CREATE ARRAYLIST OF STOPWORDS FROM STOP.TXT START ********/
 			if (!stopWordFile.exists()) {
@@ -62,8 +61,13 @@ public class ReadTerm {
 			String[] arrStopWords = stopWords.toString().split("\\s+");
 			HashMap<String, HashMap<Integer, Integer>> allTerms = new HashMap<String,  HashMap<Integer, Integer>>();
 			HashMap<Integer, Integer> getDocTerm = new HashMap<Integer, Integer>();
+			HashMap<Integer, Double> docWd = new HashMap<Integer, Double>();
+			HashMap<String, Integer> singleDocTermCount = new HashMap<String, Integer>();
+			HashMap<Integer, Double> similarity = null;
+			QueryManipulation queryObj = new QueryManipulation();
 			int docId = 0;
 			int prevCountDoc = 0;
+			double wd = 0;
 			/**
 			 *  CREATE ARRAYLIST OF STOPWORDS FROM STOP.TXT STOP *******
 			 *  */
@@ -76,11 +80,14 @@ public class ReadTerm {
 					if (!Arrays.asList(arrStopWords).contains(word)) {
 						stemOut = stemObj.steamWord(word); // stem this word
 						/**
-						 * Outer Hash Start
+						 * Outer Hash Start allTerms
 						 */
 						if(!allTerms.containsKey(stemOut)){
 							allTerms.put(stemOut, new HashMap<Integer, Integer>());
 							allTerms.get(stemOut).put(docId, 1); 
+							/** hashmap that maintains the termcount for a document **/
+							singleDocTermCount.put(stemOut, 1);
+							/** end hashmap that maintains the termcount for a document **/
 						}else{
 							//get value of the current hash map
 							if(allTerms.get(stemOut).containsKey(docId)){
@@ -89,36 +96,42 @@ public class ReadTerm {
 								prevCountDoc = 0;
 							}
 							allTerms.get(stemOut).put(docId, prevCountDoc+1);
+							/** hashmap that maintains the termcount for a document **/
+							singleDocTermCount.put(stemOut, prevCountDoc+1);
+							/** end hashmap that maintains the termcount for a document **/
 						}
+						/** allTerms hashMap **/
 					}
 				}else{
 					/**
 					 * New Document start with .I
 					 */
 					docId = input.nextInt();
+					allDocIds.add(docId);
 					prevCountDoc = 0;
 					getDocTerm.clear();
+					wd = Math.sqrt(queryObj.setWd(singleDocTermCount));
+					docWd.put(docId-1, wd);
+					//clears the singleDoc content for new doc
+					singleDocTermCount.clear();
 					
 				}
 			}
-			Set<String> allTermsHashKey = allTerms.keySet();
-			ArrayList<String> termsKeyArray = new ArrayList<String>();
-			termsKeyArray.addAll(allTermsHashKey);
-			Collections.sort(termsKeyArray);
-			for (String term: termsKeyArray){
-	            String termName =term.toString();
-	            String docDetail = allTerms.get(termName).toString();  
-	            out.println(termName+" => "+"Doc Count: "+ allTerms.get(termName).size()+" "+docDetail);
-	            
-			} 
+			//start this is used to store the value for last I.1400 as the above for loop when I.1 its wd = 0 and when I.2 wd = wd of 1 so when I.1400 wd = wd of I.1399 
+			//this below statement helps to calculate wd of I.1400
+			//in the above loop at docID(else) is executed then if is executed which maintains singleDocTermCount
+			wd = Math.sqrt(queryObj.setWd(singleDocTermCount));
+			docWd.put(docId, wd);
+			similarity = queryObj.query(allTerms, allDocIds);
+			queryObj.orderBy(docWd, similarity);
+			//end 
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} finally {
 			input.close();
-			out.close();
 		}
 	}
-
+	
 	/**
 	 * This method prints the terms in the file
 	 * @param out - Output printwriter stream
@@ -149,15 +162,15 @@ public class ReadTerm {
 	}
 
 	/**
-	 * it takes the word given by readCran() and checks if it is stopword if
-	 * the passed "checkWord" is not stopword it returns the string which was
+	 * returns true if its a stopword else false
+	 * 
 	 * passed
 	 * 
 	 * @param srcPath
 	 * @param checkWord
 	 * @return
 	 */
-	public String checkStopWord(final File srcPath, String checkWord) {
+	public boolean isStopWord(final File srcPath, String checkWord) {
 		File stopWordFile = new File(srcPath + "//input//stopWords.txt");
 		if (!stopWordFile.exists()) {
 			throw new RuntimeException("File Not Found");
@@ -185,9 +198,9 @@ public class ReadTerm {
 		String notStopWord = "";
 		String[] arrStopWords = stopWords.toString().split("\\s+");
 		if (!Arrays.asList(arrStopWords).contains(checkWord)) {
-			notStopWord = checkWord;
+			return false;
 		}
-		return notStopWord;
+		return true;
 	}
 
 	public static void main(String[] args) throws IOException {
@@ -196,5 +209,8 @@ public class ReadTerm {
 		final File srcPath = new File(getProjPath + "//src");
 		ReadTerm readTermObj = new ReadTerm();
 		readTermObj.readCran(srcPath, ".I");
+		QueryManipulation queryObj = new QueryManipulation();
+		Relevancy relObj = new Relevancy();
+		relObj.setRelevancy();
 	}
 }
